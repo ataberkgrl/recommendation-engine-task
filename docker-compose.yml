@@ -1,0 +1,86 @@
+---
+version: '2'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:5.0.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    networks:
+      - kafka-network
+
+  kafka:
+    image: confluentinc/cp-kafka:5.0.0
+    depends_on:
+      - zookeeper
+    container_name: kafka
+    networks:
+      - kafka-network
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+
+  postgres:
+    image: hepsiburada/postgres:13.1-case
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - PGDATA=postgres
+    volumes:
+      - ./db:/docker-entrypoint-initdb.d/
+    networks:
+      - postgre-network
+
+  mongodb:
+    image: mongo:5.0
+    container_name: mongodb
+    ports:
+      - 27017:27017
+    networks:
+      - mongo-network
+
+  recommendation-api:
+    build: ./recommendation-api
+    container_name: recommendation-api
+    ports:
+      - 8080:8080
+    depends_on:
+      - mongodb
+      - postgres
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/data-db
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=123456
+    networks:
+      - mongo-network
+      - postgre-network
+
+  view-consumer:
+    build: ./view-consumer
+    container_name: view-consumer
+    networks:
+      - kafka-network
+      - mongo-network
+    depends_on:
+      - kafka
+      - mongodb
+
+  view-producer:
+    build: ./view-producer
+    container_name: view-producer
+    networks:
+      - kafka-network
+    depends_on:
+      - kafka
+    
+networks:
+  kafka-network:
+    name: kafka-network
+  mongo-network:
+    name: mongo-network
+  postgre-network:
+    name: postgre-network
